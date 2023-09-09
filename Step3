@@ -1,0 +1,69 @@
+1. Amazon ECR에 애플리케이션 컨테이너 저장
+1.1 aws cli 설치
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+# AWS 관리콘솔 -> IAM -> 사용자 -> 계정선택 -> 보안자격증명 > 액세스 키 만들기 -> CLI -> 액세스키, 비밀액세스키 저장
+aws configure
+AWS Access Key ID [None]: 액세스키
+AWS Secret Access Key [None]: 비밀_액세스키
+Default region name [None]: ap-northeast-2
+Default output format [None]: <Enter>
+
+# aws 연결 arn 확인
+aws sts get-caller-identity
+
+1.3. ECR Registry 생성후 petclinic-docker upload
+퍼블릭 리포지토리 이름 : petclinic - 생성
+[푸시 명령 보기]
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/a5z0i2q5
+docker tag petclinic-docker:latest public.ecr.aws/a5z0i2q5/petclinic:latest
+docker push public.ecr.aws/a5z0i2q5/petclinic:latest
+
+
+2.EKS 운영 및 서비스 배포
+2.1 eksctl 설치
+ARCH=amd64
+PLATFORM=$(uname -s)_$ARCH
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+# (Optional) Verify checksum
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+sudo mv /tmp/eksctl /usr/local/bin
+
+2.2 kubectl 설치
+curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.27.1/2023-04-19/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH
+echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
+kubectl version --short --client
+
+2.3 EKS 구성
+eksctl create cluster \
+    --name k8s-demo \
+    --region ap-northeast-2 \
+    --with-oidc \
+    --ssh-access \
+    --ssh-public-key seongmi \
+    --nodes 3 \
+    --node-type t3.medium \
+    --node-volume-size=20 \
+    --managed
+
+CLI 명령어 완성기능 추가
+source <(kubectl completion bash)
+echo "source <(kubectl completion bash)" >> ~/.bashrc
+
+kubectl get nodes
+
+
+# MSA applicaion 동작
+git clone https://github.com/microservices-demo/microservices-demo.git
+cd microservices-demo/deploy/kubernetes/manifests
+vi 10-front-end-svc.yaml
+  type: LoadBalancer
+
+kubectl apply -f .
+kubectl get svc -n sock-shop

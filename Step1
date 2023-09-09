@@ -4,9 +4,85 @@
 (Spring Boot : petclinic)         (RDS)
 
 ## 1. AWS 인프라 구성
-petclinic-ap2-vpc
-10.0.0.0/16
+1.1  VPC
+    petclinic-ap2-vpc(10.0.0.0/16)
+    AZ: 2(a,c), public : 2, private : 2
+    NATGW 1개 AZ
 
+1.2 애플리케이션 서버(인스턴스) 생성
+    EC2 -> 인스턴스 시작
+    이름: application-server
+    Amazon Machine Image(AMI) : Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+    인스턴스 유형: t2.large
+    키 페어 : 새로 등록
+    VPC - petclinic-ap2-vpc, 서브넷 2a, 퍼블릭 IP 자동 할당(활성화)
+    보안그룹: application-server-sg - inbound: 22,8080,80
+    스토리지 : 20G(gp3)
 
+    연결 - ssh 로그인
+    
+1.3 RDS 구성
+    서브넷 그룹 생성
+        이름 : petclinic-db-sub-group
+        VPC : petclinic-ap2-vpc
+        가용영역: ap-northeast-2a, ap-northeast-2c
+    파라메터 그룹 생성
+        파라미터 그룹 패밀리 :  mysql8.0
+        유형 : DB Parameter Group
+        그룹이름: petclinic-db-param-group
+    옵션 그룹 생성
+        이름: petclinic-db-option-group
+        엔진: mysql
+        메이저 엔진 버전: 8.0
+    데이터베이스 생성
+        표준 생성 - 엔진 : MySQL
+        엔진 버전 : MySQL 8.0.33
+        템플릿 : 프리 티어
+        DB 인스턴스 식별자 : petclinic-rds-mysql8
+        마스터 사용자 이름 : admin  마스터 암호 :  admin123!.
+        인스터스 : 버스터블클래스 - db.t2.micro, 20GiB(gp3)
+        연결: EC2 컴퓨팅 리소스에 연결 -application-server 선택
+        VPC 보안 그룹(방화벽) : 새로생성 petclinic-db-sg
+        데이터베이스 인증 : 암호인증
+    데이터베이스 생성후 보안그룹 수정
 
 ## 2. 애플리케이션 운영
+2.1  application-server에 소스코드 다운로드 및 DB 구성
+sudo yum search java-17
+sudo yum install -y java-17-amazon-corretto.x86_64 git tree mysql
+
+mysql -h petclinic-rds-mysql8.cjtc7bpe2qmu.ap-northeast-2.rds.amazonaws.com -u admin -p
+mysql> create database petclinic;
+mysql> show databases;
+
+
+git clone https://github.com/spring-projects/spring-petclinic.git
+
+
+2.2 애플리케이션 서비스 동작 
+cd spring-petclinic/
+vi src/main/resources/application-mysql.properties
+# database init, supports mysql too
+database=mysql
+spring.datasource.url=jdbc:mysql://ENDPOINT_URL:3306/petclinic
+spring.datasource.username=admin
+spring.datasource.password=admin123!.
+# SQL is written to be idempotent so this is safe
+spring.sql.init.mode=always
+
+./mvnw package -DskipTests
+cd target
+java -jar -Dspring.profiles.active=mysql spring-petclinic-3.1.0-SNAPSHOT.jar
+
+# 웹브라우저 접속 TEST
+
+mysql> use petclinic;
+mysql> select * from owners;
+mysql> select * from pets;
+mysql> exit
+
+
+# 서비스 종료
+RDS
+Springboot 종료
+
