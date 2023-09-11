@@ -83,6 +83,6 @@ mysql> exit
 
 
 # 서비스 종료
-RDS
-Springboot 종료
+RDS 삭제
+EC2 삭제
 

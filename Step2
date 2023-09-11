@@ -1,4 +1,4 @@
-# Docker Host 생성
+# Docker Host 생성(완료)
     EC2 -> 인스턴스 시작
     이름: docker-server
     Amazon Machine Image(AMI) : Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
@@ -12,7 +12,7 @@
 # Docker Install
 # ec2-user로 로그인 후 docker 설치하기
 sudo -i
-yum installdocker -y 
+yum install docker git -y 
 systemctl enable --now docker
 systemctl status docker
 docker version
@@ -117,5 +117,36 @@ mysql> select * from owners;
 mysql> select * from pets;
 mysql> exit
 bash-4.4# exit
+
+
+4. Best Practice container build
+cd ~/spring-petclinic/
+cat << EOF > Dockerfile.multi 
+FROM eclipse-temurin:17-jdk-jammy as base
+WORKDIR /app
+COPY .mvn/ .mvn
+COPY mvnw pom.xml ./
+RUN ./mvnw dependency:resolve
+COPY src ./src
+
+FROM base as development
+CMD ["./mvnw", "spring-boot:run", "-Dspring-boot.run.profiles=mysql", "-Dspring-boot.run.jvmArguments='-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:8000'"]
+
+FROM base as build
+RUN ./mvnw package
+
+
+FROM eclipse-temurin:17-jre-jammy as production
+EXPOSE 8080
+COPY --from=build /app/target/spring-petclinic-*.jar /spring-petclinic.jar
+CMD ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/spring-petclinic.jar"]
+
+EOF
+
+docker build -t petclinic-multi -f Dockerfile.multi .
+
+docker images
+
+5. 정리
 
 docker rm -f $(docker ps -aq)
